@@ -20,6 +20,7 @@ export class PlaybackController {
   private videoTrackOrder: string[] = [];
   private audioClips: TimelineAudioClip[] = [];
   private totalDuration: number = 0;
+  private pendingPlayPromises: Map<HTMLVideoElement, Promise<void>> = new Map();
 
   // Master timeline clock
   private currentTime: number = 0;
@@ -180,6 +181,7 @@ export class PlaybackController {
     if (!video) {
       video = document.createElement('video');
       video.src = url;
+      (video as any)._sourceUrl = url;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
       video.playsInline = true;
@@ -203,8 +205,16 @@ export class PlaybackController {
         }
       });
 
+      video.addEventListener('loadedmetadata', () => {
+        const v = this.videoCache.get(clip.id);
+        if (v && v.currentTime === 0) {
+          v.currentTime = Math.max(0.001, clip.trimStart);
+        }
+      });
+
       this.videoCache.set(clip.id, video);
-    } else if (video.src !== url) {
+    } else if ((video as any)._sourceUrl !== url) {
+      (video as any)._sourceUrl = url;
       video.src = url;
       video.load();
     }
@@ -216,9 +226,11 @@ export class PlaybackController {
     if (!audio) {
       audio = new Audio();
       audio.src = clip.sourceUrl;
+      (audio as any)._sourceUrl = clip.sourceUrl;
       audio.preload = 'auto';
       this.audioCache.set(clip.id, audio);
-    } else if (audio.src !== clip.sourceUrl) {
+    } else if ((audio as any)._sourceUrl !== clip.sourceUrl) {
+      (audio as any)._sourceUrl = clip.sourceUrl;
       audio.src = clip.sourceUrl;
       audio.load();
     }
@@ -287,6 +299,24 @@ export class PlaybackController {
     this.seek(this.currentTime + seconds);
   }
 
+  private safePlay(video: HTMLVideoElement) {
+    if (!video.paused || this.pendingPlayPromises.has(video)) return;
+
+    const promise = video.play();
+    this.pendingPlayPromises.set(video, promise);
+
+    promise
+      .catch((err: any) => {
+        if (err.name === 'NotAllowedError') {
+          video.muted = true;
+          video.play().catch(() => {});
+        }
+      })
+      .finally(() => {
+        this.pendingPlayPromises.delete(video);
+      });
+  }
+
   private syncMediaElements(shouldPlay: boolean, forceSeek = false) {
     const activeVideos = new Set<HTMLVideoElement>();
 
@@ -305,8 +335,9 @@ export class PlaybackController {
 
           const targetTimeA = state.currentClipTime;
           const drift = Math.abs(mediaA.currentTime - targetTimeA);
+          const isStarting = this.pendingPlayPromises.has(mediaA);
 
-          if (forceSeek || (!mediaA.seeking && drift > 0.35) || mediaA.ended) {
+          if (forceSeek || (!isStarting && !mediaA.seeking && drift > 0.4) || mediaA.ended) {
             mediaA.currentTime = targetTimeA;
           }
 
@@ -321,7 +352,7 @@ export class PlaybackController {
           }
 
           if (shouldPlay && mediaA.paused) {
-            mediaA.play().catch(() => {});
+            this.safePlay(mediaA);
           }
         }
       }
@@ -335,8 +366,9 @@ export class PlaybackController {
 
           const targetTimeB = state.nextClipTime;
           const driftB = Math.abs(mediaB.currentTime - targetTimeB);
+          const isStartingB = this.pendingPlayPromises.has(mediaB);
 
-          if (forceSeek || (!mediaB.seeking && driftB > 0.35) || mediaB.ended) {
+          if (forceSeek || (!isStartingB && !mediaB.seeking && driftB > 0.4) || mediaB.ended) {
             mediaB.currentTime = targetTimeB;
           }
 
@@ -346,7 +378,7 @@ export class PlaybackController {
           mediaB.muted = clipB.isMuted || volB === 0;
 
           if (shouldPlay && mediaB.paused) {
-            mediaB.play().catch(() => {});
+            this.safePlay(mediaB);
           }
         }
       }
@@ -396,23 +428,6 @@ export class PlaybackController {
 
   private loop = () => {
     if (!this.isPlaying) return;
-
-    // Wait if any active video element is still seeking or buffering initial data
-    for (const trackId of this.videoTrackOrder) {
-      const schedule = this.trackSchedules.get(trackId);
-      if (!schedule || schedule.length === 0) continue;
-      const state = getPlaybackStateAtTime(schedule, this.currentTime);
-      if (state.currentScheduleItem) {
-        const media = this.getMediaElement(state.currentScheduleItem.clip);
-        if (media instanceof HTMLVideoElement) {
-          if (media.seeking || (media.readyState < 2 && !media.ended)) {
-            this.lastFrameTime = performance.now();
-            this.animationFrameId = requestAnimationFrame(this.loop);
-            return;
-          }
-        }
-      }
-    }
 
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
