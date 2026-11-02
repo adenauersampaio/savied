@@ -76,20 +76,30 @@ export function getPlaybackStateAtTime(
     };
   }
 
-  // Clamp time
+  // If schedule is empty or time is outside the schedule bounds
   const maxTime = schedule[schedule.length - 1].endTime;
+  if (time < 0 || time > maxTime) {
+    return {
+      currentScheduleItem: null,
+      nextScheduleItem: null,
+      transitionProgress: -1,
+      currentClipTime: 0,
+      nextClipTime: 0,
+    };
+  }
+
   const clampedTime = Math.max(0, Math.min(time, maxTime));
 
   for (let i = 0; i < schedule.length; i++) {
     const item = schedule[i];
     const nextItem = schedule[i + 1];
 
-    // Check if in transition window between item and nextItem
+    // Check if in transition window between item and nextItem: [nextItem.startTime, item.endTime)
     if (
       nextItem &&
       item.transitionDuration > 0 &&
       clampedTime >= nextItem.startTime &&
-      clampedTime <= item.endTime
+      clampedTime < item.endTime
     ) {
       const window = item.endTime - nextItem.startTime;
       const progress = window > 0 ? (clampedTime - nextItem.startTime) / window : 0;
@@ -106,8 +116,14 @@ export function getPlaybackStateAtTime(
     }
 
     // Check if within this item's solo playback window
+    // For intermediate clips: [item.startTime, soloEnd)
+    // For the final clip in the track: [item.startTime, item.endTime]
     const soloEnd = nextItem ? nextItem.startTime : item.endTime;
-    if (clampedTime >= item.startTime && clampedTime <= soloEnd) {
+    const isCurrent = nextItem
+      ? (clampedTime >= item.startTime && clampedTime < soloEnd)
+      : (clampedTime >= item.startTime && clampedTime <= soloEnd);
+
+    if (isCurrent) {
       const currentClipTime = item.clip.trimStart + (clampedTime - item.startTime);
       return {
         currentScheduleItem: item,
@@ -119,7 +135,7 @@ export function getPlaybackStateAtTime(
     }
   }
 
-  // Fallback to last item
+  // Fallback to last item (e.g. at exactly maxTime)
   const lastItem = schedule[schedule.length - 1];
   return {
     currentScheduleItem: lastItem,

@@ -174,14 +174,14 @@ export function App() {
     setProjectTitle('Novo Projeto');
   };
 
-  // Synchronize playback controller when tracks, aspect ratio, or fit mode change
+  // Synchronize playback controller when tracks, clips, aspect ratio, or fit mode change
   useEffect(() => {
     if (playbackRef.current) {
-      playbackRef.current.setTimeline(clips, audioClips);
+      playbackRef.current.setTimeline(clips, audioClips, tracks);
       playbackRef.current.setAspectRatio(aspectRatio);
       playbackRef.current.setFitMode(fitMode);
     }
-  }, [clips, audioClips, aspectRatio, fitMode]);
+  }, [clips, audioClips, tracks, aspectRatio, fitMode]);
 
   // Subscribe to playback events
   useEffect(() => {
@@ -193,8 +193,13 @@ export function App() {
     return () => unsubscribe();
   }, [playbackRef.current]);
 
-  const { totalDuration: videoDuration } = computeTimelineSchedule(clips);
-  let maxTotalDuration = videoDuration;
+  const fallbackVideoTrackId = tracks.find((t) => t.type === 'video')?.id || 'video-1';
+  let maxTotalDuration = 0;
+  for (const vTrack of tracks.filter((t) => t.type === 'video')) {
+    const vClips = clips.filter((c) => (c.trackId || fallbackVideoTrackId) === vTrack.id);
+    const { totalDuration: dur } = computeTimelineSchedule(vClips);
+    if (dur > maxTotalDuration) maxTotalDuration = dur;
+  }
   for (const a of audioClips) {
     const aEnd = (a.startTime || 0) + (a.trimEnd - a.trimStart);
     if (aEnd > maxTotalDuration) maxTotalDuration = aEnd;
