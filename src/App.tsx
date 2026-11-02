@@ -337,14 +337,15 @@ export function App() {
         startTime = insertPosition;
       } else if (insertPosition === 'start') {
         startTime = 0;
-      } else if (insertPosition === 'end') {
+      } else if (insertPosition === 'playhead') {
+        startTime = currentTime;
+      } else {
+        // Default: at the end of audio track
         const lastAudioEnd = audioClips.reduce(
           (max, a) => Math.max(max, a.startTime + (a.trimEnd - a.trimStart)),
           0
         );
         startTime = lastAudioEnd;
-      } else {
-        startTime = currentTime;
       }
 
       const newAudioClip: TimelineAudioClip = {
@@ -440,11 +441,8 @@ export function App() {
         }
       }
     } else {
-      if (newTrackClips.length === 0 || currentTime <= 0.1) {
-        newTrackClips.unshift(newClip);
-      } else {
-        newTrackClips.push(newClip);
-      }
+      // Default: always append to the end of the timeline
+      newTrackClips.push(newClip);
     }
 
     pushState([...otherTrackClips, ...newTrackClips], audioClips);
@@ -898,7 +896,6 @@ export function App() {
           selectedClip={selectedClip}
           onUpdateClip={handleUpdateClip}
           onApplyTransitionToAll={handleApplyTransitionToAll}
-          currentTime={currentTime}
           width={sidebarWidth}
         />
 

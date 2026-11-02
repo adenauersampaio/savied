@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Film,
   Sparkles,
@@ -34,7 +34,6 @@ interface SidebarProps {
   selectedClip: TimelineClip | null;
   onUpdateClip: (clipId: string, updates: Partial<TimelineClip>) => void;
   onApplyTransitionToAll: (type: TransitionType, duration: number) => void;
-  currentTime?: number;
   width: number;
 }
 
@@ -52,13 +51,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedClip,
   onUpdateClip,
   onApplyTransitionToAll,
-  currentTime = 0,
   width,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('media');
   const [transitionDuration, setTransitionDuration] = useState<number>(0.8);
   const [mediaCategory, setMediaCategory] = useState<MediaCategory>('all');
   const [isDragging, setIsDragging] = useState(false);
+  const [openMenuMediaId, setOpenMenuMediaId] = useState<string | null>(null);
+
+  // Close insertion dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-media-dropdown]')) {
+        setOpenMenuMediaId(null);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   const transitionList: { id: TransitionType; name: string; desc: string; icon: string }[] = [
     { id: 'fade', name: 'Dissolver (Crossfade)', desc: 'Transição suave cinematográfica', icon: '✨' },
@@ -316,82 +327,109 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center space-x-1 flex-shrink-0">
-                      {/* Primary Insert Button (Smart at playhead or start) */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onAddMediaToTimeline(
-                            media,
-                            media.type === 'audio' ? 'audio' : 'video',
-                            'playhead'
-                          )
-                        }
-                        className="px-2 py-1 rounded bg-[#252a3a] hover:bg-[#00d2d3] hover:text-gray-950 text-gray-200 text-[11px] font-semibold transition-all flex items-center space-x-1 shadow-sm"
-                        title={
-                          currentTime <= 0.1
-                            ? 'Inserir no Início da Linha do Tempo'
-                            : 'Inserir na Posição da Agulha (Playhead)'
-                        }
-                      >
-                        <Plus className="w-3 h-3 stroke-[3]" />
-                        <span>{currentTime <= 0.1 ? 'No Início' : 'Na Agulha'}</span>
-                      </button>
-
-                      {/* Dropdown for specific positions (Início, Agulha, Fim) */}
-                      <div className="relative group/menu">
+                    <div
+                      className="flex items-center space-x-1 flex-shrink-0 relative"
+                      data-media-dropdown
+                    >
+                      {/* Primary Insert Button: Defaults to "No Final" */}
+                      <div className="flex items-center rounded-lg overflow-hidden border border-[#2e374f] shadow-sm">
                         <button
                           type="button"
-                          className="p-1 rounded bg-[#202432] hover:bg-[#2e354a] text-gray-400 hover:text-white transition-colors"
-                          title="Escolher onde inserir (Início, Agulha ou Fim)"
+                          onClick={() =>
+                            onAddMediaToTimeline(
+                              media,
+                              media.type === 'audio' ? 'audio' : 'video',
+                              'end'
+                            )
+                          }
+                          className="px-2.5 py-1 bg-[#202537] hover:bg-[#00d2d3] hover:text-gray-950 text-gray-200 text-[11px] font-semibold transition-all flex items-center space-x-1"
+                          title="Adicionar ao final da linha do tempo (Padrão)"
                         >
-                          <ChevronDown className="w-3 h-3" />
+                          <Plus className="w-3 h-3 stroke-[3]" />
+                          <span>Adicionar</span>
                         </button>
-                        <div className="absolute right-0 top-full mt-1 hidden group-hover/menu:flex flex-col bg-[#141620] border border-[#2b3147] rounded-lg shadow-2xl py-1 min-w-[130px] z-50">
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuMediaId((prev) => (prev === media.id ? null : media.id));
+                          }}
+                          className={`px-1.5 py-1 border-l border-[#2e374f] transition-colors ${
+                            openMenuMediaId === media.id
+                              ? 'bg-[#00d2d3] text-gray-950'
+                              : 'bg-[#202537] hover:bg-[#2b334d] text-gray-300'
+                          }`}
+                          title="Escolher onde inserir (Final, Agulha ou Início)"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Interactive Dropdown Menu (Controlled by click state, NEVER disappears on mouse move!) */}
+                      {openMenuMediaId === media.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-full mt-1.5 flex flex-col bg-[#141620] border border-[#2c3349] rounded-xl shadow-2xl py-1.5 min-w-[170px] z-50 animate-in fade-in zoom-in-95 duration-100"
+                        >
+                          <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#232738] mb-1">
+                            Onde Inserir
+                          </div>
+
                           <button
                             type="button"
-                            onClick={() =>
-                              onAddMediaToTimeline(
-                                media,
-                                media.type === 'audio' ? 'audio' : 'video',
-                                'start'
-                              )
-                            }
-                            className="px-2.5 py-1.5 text-left text-[11px] text-gray-300 hover:text-white hover:bg-[#222739] flex items-center space-x-1.5"
-                          >
-                            <ChevronsLeft className="w-3.5 h-3.5 text-[#00d2d3]" />
-                            <span>Inserir no Início</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onAddMediaToTimeline(
-                                media,
-                                media.type === 'audio' ? 'audio' : 'video',
-                                'playhead'
-                              )
-                            }
-                            className="px-2.5 py-1.5 text-left text-[11px] text-gray-300 hover:text-white hover:bg-[#222739] flex items-center space-x-1.5"
-                          >
-                            <Scissors className="w-3.5 h-3.5 text-[#00d2d3]" />
-                            <span>Inserir na Agulha</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
+                            onClick={() => {
                               onAddMediaToTimeline(
                                 media,
                                 media.type === 'audio' ? 'audio' : 'video',
                                 'end'
-                              )
-                            }
-                            className="px-2.5 py-1.5 text-left text-[11px] text-gray-300 hover:text-white hover:bg-[#222739] flex items-center space-x-1.5"
+                              );
+                              setOpenMenuMediaId(null);
+                            }}
+                            className="px-3 py-1.5 text-left text-xs text-gray-200 hover:text-white hover:bg-[#222739] flex items-center justify-between group/opt"
                           >
-                            <ChevronsRight className="w-3.5 h-3.5 text-[#00d2d3]" />
-                            <span>Inserir no Final</span>
+                            <div className="flex items-center space-x-2">
+                              <ChevronsRight className="w-3.5 h-3.5 text-[#00d2d3]" />
+                              <span className="font-medium">No Final</span>
+                            </div>
+                            <span className="text-[10px] bg-[#00d2d3]/20 text-[#00d2d3] px-1 rounded font-semibold">
+                              Padrão
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onAddMediaToTimeline(
+                                media,
+                                media.type === 'audio' ? 'audio' : 'video',
+                                'playhead'
+                              );
+                              setOpenMenuMediaId(null);
+                            }}
+                            className="px-3 py-1.5 text-left text-xs text-gray-200 hover:text-white hover:bg-[#222739] flex items-center space-x-2"
+                          >
+                            <Scissors className="w-3.5 h-3.5 text-[#00d2d3]" />
+                            <span className="font-medium">Na Agulha (Playhead)</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onAddMediaToTimeline(
+                                media,
+                                media.type === 'audio' ? 'audio' : 'video',
+                                'start'
+                              );
+                              setOpenMenuMediaId(null);
+                            }}
+                            className="px-3 py-1.5 text-left text-xs text-gray-200 hover:text-white hover:bg-[#222739] flex items-center space-x-2"
+                          >
+                            <ChevronsLeft className="w-3.5 h-3.5 text-[#00d2d3]" />
+                            <span className="font-medium">No Início (1º clipe)</span>
                           </button>
                         </div>
-                      </div>
+                      )}
 
                       {/* Delete from library */}
                       <button
