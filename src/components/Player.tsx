@@ -17,6 +17,7 @@ import { PlaybackController } from '../engine/PlaybackController';
 
 interface PlayerProps {
   playbackControllerRef: React.MutableRefObject<PlaybackController | null>;
+  onControllerReady?: (controller: PlaybackController) => void;
   aspectRatio: AspectRatio;
   fitMode: 'contain' | 'cover';
   currentTime: number;
@@ -34,6 +35,7 @@ interface PlayerProps {
 
 export const Player: React.FC<PlayerProps> = ({
   playbackControllerRef,
+  onControllerReady,
   aspectRatio,
   fitMode,
   currentTime,
@@ -54,7 +56,9 @@ export const Player: React.FC<PlayerProps> = ({
 
   useEffect(() => {
     if (canvasRef.current && !playbackControllerRef.current) {
-      playbackControllerRef.current = new PlaybackController(canvasRef.current);
+      const controller = new PlaybackController(canvasRef.current);
+      playbackControllerRef.current = controller;
+      onControllerReady?.(controller);
     }
   }, []);
 

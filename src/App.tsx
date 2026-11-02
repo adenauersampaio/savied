@@ -56,8 +56,22 @@ export function App() {
   });
 
   // Timeline & Multi-Track Clips
-  const [clips, setClips] = useState<TimelineClip[]>([]);
-  const [audioClips, setAudioClips] = useState<TimelineAudioClip[]>([]);
+  const [clips, setClips] = useState<TimelineClip[]>(() => {
+    try {
+      const saved = localStorage.getItem('savied_clips');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [audioClips, setAudioClips] = useState<TimelineAudioClip[]>(() => {
+    try {
+      const saved = localStorage.getItem('savied_audio_clips');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedAudioClipId, setSelectedAudioClipId] = useState<string | null>(null);
 
@@ -88,10 +102,24 @@ export function App() {
   ]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  // Playback Controller Ref
+  // Playback Controller Ref & State
   const playbackRef = useRef<PlaybackController | null>(null);
+  const [playbackController, setPlaybackController] = useState<PlaybackController | null>(null);
 
-  // Persist media library and panel sizes to localStorage
+  const handleControllerReady = (ctrl: PlaybackController) => {
+    playbackRef.current = ctrl;
+    setPlaybackController(ctrl);
+  };
+
+  // Persist timeline clips, media library and panel sizes to localStorage
+  useEffect(() => {
+    localStorage.setItem('savied_clips', JSON.stringify(clips));
+  }, [clips]);
+
+  useEffect(() => {
+    localStorage.setItem('savied_audio_clips', JSON.stringify(audioClips));
+  }, [audioClips]);
+
   useEffect(() => {
     localStorage.setItem('savied_user_media', JSON.stringify(userMedia));
   }, [userMedia]);
@@ -164,6 +192,8 @@ export function App() {
 
     playbackRef.current?.pause();
     playbackRef.current?.seek(0);
+    localStorage.removeItem('savied_clips');
+    localStorage.removeItem('savied_audio_clips');
     setClips([]);
     setAudioClips([]);
     setSelectedClipId(null);
@@ -176,22 +206,24 @@ export function App() {
 
   // Synchronize playback controller when tracks, clips, aspect ratio, or fit mode change
   useEffect(() => {
-    if (playbackRef.current) {
-      playbackRef.current.setTimeline(clips, audioClips, tracks);
-      playbackRef.current.setAspectRatio(aspectRatio);
-      playbackRef.current.setFitMode(fitMode);
+    const controller = playbackController || playbackRef.current;
+    if (controller) {
+      controller.setTimeline(clips, audioClips, tracks);
+      controller.setAspectRatio(aspectRatio);
+      controller.setFitMode(fitMode);
     }
-  }, [clips, audioClips, tracks, aspectRatio, fitMode]);
+  }, [playbackController, clips, audioClips, tracks, aspectRatio, fitMode]);
 
   // Subscribe to playback events
   useEffect(() => {
-    if (!playbackRef.current) return;
-    const unsubscribe = playbackRef.current.subscribe({
+    const controller = playbackController || playbackRef.current;
+    if (!controller) return;
+    const unsubscribe = controller.subscribe({
       onTimeUpdate: (time) => setCurrentTime(time),
       onPlayStateChange: (playing) => setIsPlaying(playing),
     });
     return () => unsubscribe();
-  }, [playbackRef.current]);
+  }, [playbackController]);
 
   const fallbackVideoTrackId = tracks.find((t) => t.type === 'video')?.id || 'video-1';
   let maxTotalDuration = 0;
@@ -916,6 +948,7 @@ export function App() {
         {/* Center Preview Monitor */}
         <Player
           playbackControllerRef={playbackRef}
+          onControllerReady={handleControllerReady}
           aspectRatio={aspectRatio}
           fitMode={fitMode}
           currentTime={currentTime}

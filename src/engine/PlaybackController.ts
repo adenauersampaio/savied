@@ -197,6 +197,12 @@ export class PlaybackController {
         }
       });
 
+      video.addEventListener('canplay', () => {
+        if (!this.isPlaying) {
+          this.renderCurrentFrame();
+        }
+      });
+
       this.videoCache.set(clip.id, video);
     } else if (video.src !== url) {
       video.src = url;
@@ -300,7 +306,7 @@ export class PlaybackController {
           const targetTimeA = state.currentClipTime;
           const drift = Math.abs(mediaA.currentTime - targetTimeA);
 
-          if (forceSeek || drift > 0.25 || mediaA.ended) {
+          if (forceSeek || (!mediaA.seeking && drift > 0.35) || mediaA.ended) {
             mediaA.currentTime = targetTimeA;
           }
 
@@ -314,7 +320,7 @@ export class PlaybackController {
             mediaA.muted = clipA.isMuted || baseVolA === 0;
           }
 
-          if (shouldPlay && mediaA.paused && mediaA.readyState >= 2) {
+          if (shouldPlay && mediaA.paused) {
             mediaA.play().catch(() => {});
           }
         }
@@ -330,7 +336,7 @@ export class PlaybackController {
           const targetTimeB = state.nextClipTime;
           const driftB = Math.abs(mediaB.currentTime - targetTimeB);
 
-          if (forceSeek || driftB > 0.25 || mediaB.ended) {
+          if (forceSeek || (!mediaB.seeking && driftB > 0.35) || mediaB.ended) {
             mediaB.currentTime = targetTimeB;
           }
 
@@ -339,7 +345,7 @@ export class PlaybackController {
           mediaB.volume = volB;
           mediaB.muted = clipB.isMuted || volB === 0;
 
-          if (shouldPlay && mediaB.paused && mediaB.readyState >= 2) {
+          if (shouldPlay && mediaB.paused) {
             mediaB.play().catch(() => {});
           }
         }
@@ -391,6 +397,23 @@ export class PlaybackController {
   private loop = () => {
     if (!this.isPlaying) return;
 
+    // Wait if any active video element is still seeking or buffering initial data
+    for (const trackId of this.videoTrackOrder) {
+      const schedule = this.trackSchedules.get(trackId);
+      if (!schedule || schedule.length === 0) continue;
+      const state = getPlaybackStateAtTime(schedule, this.currentTime);
+      if (state.currentScheduleItem) {
+        const media = this.getMediaElement(state.currentScheduleItem.clip);
+        if (media instanceof HTMLVideoElement) {
+          if (media.seeking || (media.readyState < 2 && !media.ended)) {
+            this.lastFrameTime = performance.now();
+            this.animationFrameId = requestAnimationFrame(this.loop);
+            return;
+          }
+        }
+      }
+    }
+
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
@@ -413,7 +436,7 @@ export class PlaybackController {
   };
 
   public renderCurrentFrame() {
-    if (this.trackSchedules.size === 0) {
+    if (this.totalDuration <= 0 || this.trackSchedules.size === 0) {
       this.renderer.clear();
       return;
     }
@@ -459,7 +482,7 @@ export class PlaybackController {
       isFirstTrack = false;
     }
 
-    if (!anyDrawn) {
+    if (!anyDrawn && this.totalDuration <= 0) {
       this.renderer.clear();
     }
   }
