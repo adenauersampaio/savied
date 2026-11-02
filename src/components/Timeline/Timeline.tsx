@@ -407,17 +407,17 @@ export const Timeline: React.FC<TimelineProps> = ({
                     const mouseTimelineX = e.clientX - rect.left + scrollLeft;
 
                     let insertIndex = 0;
-                    let indicatorX = 8;
+                    let indicatorX = 0;
 
                     if (trackClips.length === 0) {
                       insertIndex = 0;
-                      indicatorX = 8;
+                      indicatorX = 0;
                     } else if (
                       mouseTimelineX <
                       (trackSchedule[0].startTime + trackSchedule[0].duration * 0.45) * zoom
                     ) {
                       insertIndex = 0;
-                      indicatorX = 8;
+                      indicatorX = 0;
                     } else {
                       insertIndex = trackClips.length;
                       indicatorX = trackSchedule[trackSchedule.length - 1].endTime * zoom;
@@ -512,7 +512,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       console.error('Drop error:', err);
                     }
                   }}
-                  className={`h-24 px-2 py-2 flex items-center relative border-b border-[#1c1f2c] transition-colors overflow-visible ${
+                  className={`h-24 relative border-b border-[#1c1f2c] transition-colors overflow-visible ${
                     isDragOverThisTrack
                       ? 'bg-[#182a36]/60 ring-1 ring-inset ring-[#00d2d3]/50'
                       : 'bg-[#12131c]/50'
@@ -535,11 +535,11 @@ export const Timeline: React.FC<TimelineProps> = ({
                   )}
 
                   {trackClips.length === 0 ? (
-                    <div className="w-full h-16 rounded-xl border-2 border-dashed border-[#262a3c] flex items-center justify-center text-xs text-gray-500">
+                    <div className="mx-2 mt-3 h-16 rounded-xl border-2 border-dashed border-[#262a3c] flex items-center justify-center text-xs text-gray-500">
                       Arraste vídeos ou fotos da biblioteca para esta faixa ({vTrack.name})
                     </div>
                   ) : (
-                    <div className="flex items-center">
+                    <div className="relative w-full h-full">
                       {trackSchedule.map((item, idx) => {
                         const clip = item.clip;
                         const isSelected = clip.id === selectedClipId;
@@ -564,21 +564,31 @@ export const Timeline: React.FC<TimelineProps> = ({
                             />
 
                             {!isLast && (
-                              <TransitionBadge
-                                transition={
-                                  clip.transitionOut || {
-                                    type: 'fade',
-                                    duration: 0.8,
-                                  }
-                                }
-                                onUpdateTransition={(trans: ClipTransition) => {
-                                  onUpdateClip(clip.id, { transitionOut: trans });
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: `${((item.endTime + trackSchedule[idx + 1].startTime) / 2) * zoom}px`,
+                                  top: '26px',
+                                  transform: 'translateX(-50%)',
+                                  zIndex: 30,
                                 }}
-                                maxDuration={Math.min(
-                                  item.duration / 2,
-                                  trackSchedule[idx + 1].duration / 2
-                                )}
-                              />
+                              >
+                                <TransitionBadge
+                                  transition={
+                                    clip.transitionOut || {
+                                      type: 'fade',
+                                      duration: 0.8,
+                                    }
+                                  }
+                                  onUpdateTransition={(trans: ClipTransition) => {
+                                    onUpdateClip(clip.id, { transitionOut: trans });
+                                  }}
+                                  maxDuration={Math.min(
+                                    item.duration / 2,
+                                    trackSchedule[idx + 1].duration / 2
+                                  )}
+                                />
+                              </div>
                             )}
                           </React.Fragment>
                         );
@@ -664,7 +674,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       console.error('Audio track drop error:', err);
                     }
                   }}
-                  className={`h-20 px-2 py-2 relative border-b border-[#1c1f2c] transition-colors ${
+                  className={`h-20 relative border-b border-[#1c1f2c] transition-colors ${
                     isDragOverThisTrack
                       ? 'bg-[#152e28]/60 ring-1 ring-inset ring-emerald-400/50'
                       : 'bg-[#0f1917]/30'
@@ -683,7 +693,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                   )}
 
                   {trackAudios.length === 0 ? (
-                    <div className="w-full h-14 rounded-lg border border-dashed border-[#1a3832] flex items-center justify-center text-xs text-gray-600">
+                    <div className="mx-2 mt-3 h-14 rounded-lg border border-dashed border-[#1a3832] flex items-center justify-center text-xs text-gray-600">
                       Arraste áudios para cá ou arraste um vídeo para desvincular seu áudio
                     </div>
                   ) : (

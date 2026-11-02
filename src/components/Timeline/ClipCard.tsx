@@ -12,6 +12,7 @@ interface ClipCardProps {
   onSeek: (time: number) => void;
   zoom: number; // pixels per second
   timelineStart: number;
+  style?: React.CSSProperties;
 }
 
 export const ClipCard: React.FC<ClipCardProps> = ({
@@ -23,12 +24,14 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   onSeek,
   zoom,
   timelineStart,
+  style,
 }) => {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isTrimming, setIsTrimming] = useState(false);
 
   const duration = Math.max(0.1, clip.trimEnd - clip.trimStart);
   const width = Math.max(30, duration * zoom);
+  const left = timelineStart * zoom;
 
   // Handle Dragging Left Trim Handle
   const handleLeftMouseDown = (e: React.MouseEvent) => {
@@ -102,11 +105,17 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         );
         e.dataTransfer.effectAllowed = 'move';
       }}
-      style={{ width: `${width}px` }}
-      className={`relative h-20 rounded-xl flex-shrink-0 flex items-center overflow-hidden cursor-grab active:cursor-grabbing select-none border transition-all group ${
+      style={{
+        position: 'absolute',
+        left: `${left}px`,
+        width: `${width}px`,
+        top: '8px',
+        ...style,
+      }}
+      className={`h-20 rounded-xl flex items-center overflow-hidden cursor-grab active:cursor-grabbing select-none border transition-shadow group ${
         isSelected
-          ? 'bg-[#1a2233] border-[#00d2d3] ring-2 ring-[#00d2d3]/50 shadow-lg shadow-cyan-500/20 z-10'
-          : 'bg-[#161822] border-[#292e40] hover:border-[#3d4560]'
+          ? 'bg-[#1a2233] border-[#00d2d3] ring-2 ring-[#00d2d3]/50 shadow-lg shadow-cyan-500/20 z-20'
+          : 'bg-[#161822] border-[#292e40] hover:border-[#3d4560] z-10'
       }`}
       title="Clique para selecionar. Arraste para reordenar este clipe na Timeline."
     >

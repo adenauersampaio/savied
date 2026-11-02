@@ -110,6 +110,7 @@ export const AudioClipCard: React.FC<AudioClipCardProps> = ({
       style={{
         left: `${left}px`,
         width: `${width}px`,
+        top: '12px',
       }}
       className={`absolute h-14 rounded-lg flex items-center overflow-hidden cursor-move select-none border transition-all z-10 group ${
         isSelected
